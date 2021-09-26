@@ -17,6 +17,7 @@ class OSInfo:
     bp: object = None
 
     def __str__(self):
+        return super().__str__()
         if not self.stub:
             if self.m1n1_ver is not None:
                 return f"macOS v{self.version} + m1n1 {self.m1n1_ver} [{self.vgid}]"
@@ -38,11 +39,11 @@ class OSEnum:
         self.dutil = dutil
         self.sysdsk = sysdsk
     
-    def collect(self, parts):
+    def collect(self, parts, data_uuid=None):
         for p in parts:
-            self.collect_one(p)
+            self.collect_one(p, data_uuid)
 
-    def collect_one(self, part):
+    def collect_one(self, part, data_uuid=None, system_uuid=None):
         if part.container is None:
             return
 
@@ -50,6 +51,11 @@ class OSEnum:
         by_role = {}
 
         for volume in ct["Volumes"]:
+            print(volume["Roles"])
+            if data_uuid and volume["Roles"] == ["Data"] and volume["APFSVolumeUUID"] != data_uuid:
+                continue
+            elif system_uuid and volume["Roles"] == ["System"] and volume["APFSVolumeUUID"] != system_uuid:
+                continue
             by_role.setdefault(tuple(volume["Roles"]), []).append(volume)
 
         for role in ("Preboot", "Recovery", "Data", "System"):
@@ -57,7 +63,10 @@ class OSEnum:
             if not vols:
                 return
             elif len(vols) > 1:
-                return
+                # TODO(zhuowei): HACK: I have multiboot
+                vols = vols[0:1]
+                #return
+        print(by_role)
 
         mounts = {}
 

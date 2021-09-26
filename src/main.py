@@ -3,6 +3,8 @@
 import os, os.path, shlex, subprocess, sys, time
 from dataclasses import dataclass
 
+import copy
+
 import system, osenum, stub, diskutil
 from util import *
 
@@ -39,6 +41,12 @@ IPSW_VERSIONS = [
          "iBoot-7429.30.8.0.4",
          False,
          "https://updates.cdn-apple.com/2021SummerSeed/fullrestores/071-80097/9F639C04-F128-4EC9-93D3-2AAE04F8A314/UniversalMac_12.0_21A5304g_Restore.ipsw"),
+         #"http://raider.lan:5000/UniversalMac_12.0_21A5304g_Restore.ipsw"),
+    IPSW("12.0 beta7",
+         "12.0",
+         "iBoot-7429.40.68",
+         False,
+         "https://updates.cdn-apple.com/2021SummerSeed/fullrestores/002-02558/9EEDAAF0-A559-4212-922E-C2620045A6CE/UniversalMac_12.0_21A5522h_Restore.ipsw"),
          #"http://raider.lan:5000/UniversalMac_12.0_21A5304g_Restore.ipsw"),
 ]
 
@@ -103,7 +111,33 @@ class InstallerMain:
         self.ins.prepare_volume(self.part)
         self.ins.check_volume()
         self.ins.install_files(self.cur_os)
-        self.step2()
+        # self.step2()
+
+    def action_install_coexist(self, avail_parts):
+        self.check_cur_os()
+
+        containers = {str(i): p.desc for i,p in enumerate(self.parts) if p in avail_parts}
+        
+        print()
+        print("Choose a container to install into:")
+        idx = self.choice("Target container", containers)
+        self.part = self.parts[int(idx)]
+        
+        print(f"Installing stub macOS into {self.part.name} ({self.part.label})")
+        print("TODO(zhuowei): input UUIDs!")
+
+        ipsw = self.choose_ipsw()
+        self.ins = stub.Installer(self.sysinfo, self.dutil, self.osinfo, ipsw)
+      
+        # TODO(zhuowei): let the user choose the uuids
+        data_uuid = "E29BE816-A17B-4307-AC26-C8AB1591527C"
+        system_uuid = "6D4EC880-B6ED-48AC-8F2F-AABD4EAA2715"
+        # terrible: self.part needs to be cloned since I hacked check_volume to overwrite the OS
+        self.part = copy.copy(self.part)
+        self.ins.check_volume(self.part, data_uuid, system_uuid)
+        self.ins.install_files(self.cur_os)
+        print("ok now go and fix your startup settings")
+        #self.step2()
 
     def action_install_into_free(self, avail_free):
         self.check_cur_os()
@@ -268,7 +302,7 @@ class InstallerMain:
         print("  https://alx.sh/w")
         print()
         print("Press enter to continue.")
-        input()
+        # input()
         print()
 
         print("Collecting system information...")
@@ -295,7 +329,9 @@ class InstallerMain:
     
         print("Collecting OS information...")
         self.osinfo = osenum.OSEnum(self.sysinfo, self.dutil, self.sysdsk)
-        self.osinfo.collect(self.parts)
+        # TODO(zhuowei): Ugh! (current OS's Data UUID, since collect fails when there's more than one data/system pair)
+        data_uuid = "ABA543C1-8BCC-4E60-B2CB-DE48015C8FE8"
+        self.osinfo.collect(self.parts, data_uuid)
 
         parts_free = []
         parts_empty_apfs = []
@@ -367,6 +403,8 @@ class InstallerMain:
             actions["r"] = "Resize an existing OS and install Asahi Linux"
             if self.sysinfo.boot_mode == "one true recoveryOS":
                 actions["m"] = "Install m1n1 into an existing OS container"
+        if parts_system:
+            actions["d"] = "Install a macOS stub and m1n1 into an existing APFS container, coexisting with an existing macOS"
 
         if not actions:
             print("No actions available on this system.")
@@ -375,12 +413,15 @@ class InstallerMain:
         actions["q"] = "Quit without doing anything"
 
         print("Choose what to do:")
-        act = self.choice("Action", actions, "q")
+        #act = self.choice("Action", actions, "q")
+        act = "d"
 
         if act == "f":
             self.action_install_into_free(parts_free)
         elif act == "a":
             self.action_install_into_container(parts_empty_apfs)
+        elif act == "d":
+            self.action_install_coexist(parts_system)
         elif act == "r":
             print("Unimplemented")
             sys.exit(1)
