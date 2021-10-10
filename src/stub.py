@@ -2,6 +2,10 @@
 import os, plistlib, shutil, sys, stat, subprocess, urlcache, zipfile
 import osenum
 
+class FakeUcache:
+    def flush_progress(self):
+        pass
+
 class Installer:
     def __init__(self, sysinfo, dutil, osinfo, ipsw_info):
         self.dutil = dutil
@@ -10,8 +14,10 @@ class Installer:
         self.verbose = "-v" in sys.argv
 
         print("Downloading OS package info...")
-        self.ucache = urlcache.URLCache(ipsw_info.url)
-        self.ipsw = zipfile.ZipFile(self.ucache)
+        #self.ucache = urlcache.URLCache(ipsw_info.url)
+        #self.ipsw = zipfile.ZipFile(self.ucache)
+        self.ucache = FakeUcache()
+        self.ipsw = zipfile.ZipFile(open("/Users/zhuowei/Documents/UniversalMac_12.0_21A5543b_Restore.ipsw", "rb"))
         self.ucache.flush_progress()
         print()
 
@@ -63,12 +69,12 @@ class Installer:
         if self.verbose:
             print()
 
-    def check_volume(self, part=None):
+    def check_volume(self, part=None, target_os=None):
         if part:
             self.part = part
 
         print("Checking volumes...")
-        os = self.osinfo.collect_part(self.part)
+        os = self.osinfo.collect_part(self.part) if target_os is None else [target_os]
 
         if len(os) != 1:
             raise Exception("Container is not ready for OS install")

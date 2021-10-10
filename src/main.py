@@ -37,6 +37,11 @@ IPSW_VERSIONS = [
          "iBoot-7429.40.84.181.1",
          False,
          "https://updates.cdn-apple.com/2021SummerSeed/fullrestores/002-03830/B8D1658D-A579-4479-BBB1-7CDEAF328303/UniversalMac_12.0_21A5534d_Restore.ipsw"),
+    IPSW("12.0 beta9",
+         "12.0",
+         "iBoot-7429.40.92.0.5",
+         False,
+         "https://updates.cdn-apple.com/2021SummerSeed/fullrestores/002-12797/682E85F3-78D2-4425-8774-C0950CD5EB8E/UniversalMac_12.0_21A5543b_Restore.ipsw"),
 ]
 
 class InstallerMain:
@@ -101,6 +106,32 @@ class InstallerMain:
         self.ins.check_volume()
         self.ins.install_files(self.cur_os)
         self.step2()
+
+    def action_install_overwrite(self, avail_parts):
+        self.check_cur_os()
+        oses = []
+        for p in self.parts:
+            for os in p.os:
+                oses.append((os, p))
+
+        oses_choices = {str(i): str(os[0]) for i,os in enumerate(oses)}
+
+        print()
+        print("Choose an OS to OVERWRITE:")
+        idx = self.choice("Target volume group", oses_choices)
+        index = int(idx)
+        self.part = oses[index][1]
+        target_os = oses[index][0]
+
+        print(f"Installing stub macOS into {self.part.name} ({self.part.label})")
+
+        ipsw = self.choose_ipsw()
+        self.ins = stub.Installer(self.sysinfo, self.dutil, self.osinfo, ipsw)
+
+        self.ins.check_volume(self.part, target_os)
+        self.ins.install_files(self.cur_os)
+        print("Now go and setup boot device")
+        #self.step2()
 
     def action_install_into_free(self, avail_free):
         self.check_cur_os()
@@ -283,7 +314,7 @@ class InstallerMain:
         print("  https://alx.sh/w")
         print()
         print("Press enter to continue.")
-        input()
+        #input()
         print()
 
         print("Collecting system information...")
@@ -389,6 +420,8 @@ class InstallerMain:
             actions["r"] = "Resize an existing OS and install Asahi Linux"
             if self.sysinfo.boot_mode == "one true recoveryOS":
                 actions["m"] = "Install m1n1 into an existing OS container"
+        if parts_system:
+            actions["d"] = "Install m1n1 on top of an existing system/data volume group"
 
         if not actions:
             print("No actions available on this system.")
@@ -403,6 +436,8 @@ class InstallerMain:
             self.action_install_into_free(parts_free)
         elif act == "a":
             self.action_install_into_container(parts_empty_apfs)
+        elif act == "d":
+            self.action_install_overwrite(parts_system)
         elif act == "r":
             print("Unimplemented")
             sys.exit(1)
